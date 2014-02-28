@@ -494,7 +494,7 @@ public class SolrIndex implements IndexProvider {
                 //}
             } else if (value instanceof String) {
                 if (titanPredicate == Text.CONTAINS) {
-                    q.addFilterQuery(key + ":\""+((String) value).toLowerCase()+"\"");
+                    q.addFilterQuery(key + ":(\""+((String) value).toLowerCase()+"\")");
                     return q;
                 } else if (titanPredicate == Text.PREFIX) {
                     String prefixConventionName = "String";

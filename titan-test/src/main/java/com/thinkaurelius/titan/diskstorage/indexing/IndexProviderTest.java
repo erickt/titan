@@ -80,12 +80,10 @@ public abstract class IndexProviderTest {
 
     @Before
     public void setUp() throws Exception {
-        /*
         index = openIndex();
         index.clearStorage();
         index.close();
-        */
-        openIndex().clearStorage();
+        //openIndex().clearStorage();
         open();
     }
 
