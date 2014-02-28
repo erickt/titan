@@ -494,10 +494,7 @@ public class SolrIndex implements IndexProvider {
                 //}
             } else if (value instanceof String) {
                 if (titanPredicate == Text.CONTAINS) {
-                    //e.g. - if terms tomorrow and world were supplied, and fq=text:(tomorrow  world)
-                    //sample data set would return 2 documents: one where text = Tomorrow is the World,
-                    //and the second where text = Hello World
-                    q.addFilterQuery(key + ":("+((String) value).toLowerCase()+")");
+                    q.addFilterQuery(key + ":\""+((String) value).toLowerCase()+"\"");
                     return q;
                 } else if (titanPredicate == Text.PREFIX) {
                     String prefixConventionName = "String";
