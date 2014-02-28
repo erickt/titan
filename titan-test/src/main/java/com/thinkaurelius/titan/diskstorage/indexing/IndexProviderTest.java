@@ -155,15 +155,13 @@ public abstract class IndexProviderTest {
             assertEquals(1, tx.query(new IndexQuery(store, PredicateCondition.of(TEXT, Text.CONTAINS, "bob"))).size());
             assertEquals(0, tx.query(new IndexQuery(store, PredicateCondition.of(TEXT, Text.CONTAINS, "worl"))).size());
             // elasticsearch
-            assertEquals(0, tx.query(new IndexQuery(store, PredicateCondition.of(TEXT, Text.CONTAINS, "Tomorrow is the world"))).size());
+            //assertEquals(0, tx.query(new IndexQuery(store, PredicateCondition.of(TEXT, Text.CONTAINS, "Tomorrow is the world"))).size());
 
-            /*
             // solr
             //A CONTAINS query of "Tomorrow is the world" would cause a return of :
             //doc1 : because it matches on the term "world"
             //doc2 : because it matches on the term "Tomorrow is the world"
             assertEquals(2, tx.query(new IndexQuery(store, PredicateCondition.of(TEXT, Text.CONTAINS, "Tomorrow is the world"))).size());
-            */
 
             //Ordering
             result = tx.query(new IndexQuery(store, PredicateCondition.of(TEXT, Text.CONTAINS, "world"), orderTimeDesc));
