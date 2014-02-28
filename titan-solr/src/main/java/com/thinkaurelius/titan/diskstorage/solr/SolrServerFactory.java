@@ -3,6 +3,7 @@ package com.thinkaurelius.titan.diskstorage.solr;
 import org.apache.commons.configuration.Configuration;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.impl.CloudSolrServer;
 import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.request.CoreAdminRequest;
@@ -11,6 +12,7 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.util.NamedList;
 
+import org.apache.solr.core.CoreContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,9 +30,6 @@ public class SolrServerFactory {
 
     private Logger log = LoggerFactory.getLogger(SolrServerFactory.class);
 
-
-
-
     public Map<String, SolrServer> buildSolrServers(Configuration config)
             throws IllegalArgumentException, SolrException {
         Map<String, SolrServer> solrServers;
@@ -41,6 +40,8 @@ public class SolrServerFactory {
             solrServers = buildHttpSolrServer(config);
         } else if (mode.equalsIgnoreCase(SOLR_MODE_CLOUD)) {
             solrServers = buildCloudSolrServer(config);
+        } else if (mode.equalsIgnoreCase(SOLR_MODE_EMBEDDED)) {
+            solrServers = buildEmbeddedSolrServer(config);
         } else {
             throw new IllegalArgumentException(
                     "Unable to determine the type of Solr connection needed. " +
@@ -69,8 +70,6 @@ public class SolrServerFactory {
         }
         return servers;
     }
-
-
 
     private void createCoreIfNotExists(String coreName, SolrServer server) {
 
@@ -122,7 +121,6 @@ public class SolrServerFactory {
 
             List<String> coreNames = SolrUtils.parseConfigForCoreNames(config);
 
-
             for (String coreName : coreNames) {
                 //createCoreIfNotExists(coreName, server);
                 servers.put(coreName, server);
@@ -133,5 +131,25 @@ public class SolrServerFactory {
             throw new SolrException(SolrException.ErrorCode.UNKNOWN, message, e);
         }
         return servers;
+    }
+
+    private Map<String, SolrServer> buildEmbeddedSolrServer(Configuration config) {
+        EmbeddedSolrServer server = null;
+        Map<String, SolrServer> servers = new HashMap<String, SolrServer>();
+
+        String solrHome = config.getString(SOLR_HOME);
+
+        CoreContainer coreContainer = new CoreContainer(solrHome);
+        coreContainer.load();
+
+        List<String> coreNames = SolrUtils.parseConfigForCoreNames(config);
+        for (String coreName : coreNames) {
+            server = new EmbeddedSolrServer(coreContainer, coreName);
+            //createCoreIfNotExists(coreName, server);
+            servers.put(coreName, server);
+        }
+
+        return servers;
+
     }
 }

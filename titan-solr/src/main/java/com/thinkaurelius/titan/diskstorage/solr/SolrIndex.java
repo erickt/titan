@@ -5,6 +5,7 @@ import com.google.common.collect.Sets;
 import com.spatial4j.core.exception.InvalidShapeException;
 import com.thinkaurelius.titan.core.Order;
 import com.thinkaurelius.titan.core.attribute.*;
+import com.thinkaurelius.titan.diskstorage.PermanentStorageException;
 import com.thinkaurelius.titan.diskstorage.StorageException;
 import com.thinkaurelius.titan.diskstorage.TemporaryStorageException;
 import com.thinkaurelius.titan.diskstorage.TransactionHandle;
@@ -122,23 +123,15 @@ public class SolrIndex implements IndexProvider {
      *  </p>
      * @param config Titan configuration passed in at start up time
      */
-    public SolrIndex(Configuration config) {
+    public SolrIndex(Configuration config) throws StorageException {
 
         SolrServerFactory factory = new SolrServerFactory();
         coreNames = SolrUtils.parseConfigForCoreNames(config);
 
-        try {
-            solrServers = factory.buildSolrServers(config);
-            detectAndSetEmbeddedMode(config);
-        } catch (Exception e) {
-            log.error("Unable to generate a Solr Server connection.", e);
-        }
+        solrServers = factory.buildSolrServers(config);
+        detectAndSetEmbeddedMode(config);
 
-        try {
-            keyFieldIds = parseKeyFieldsForCores(config);
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        }
+        keyFieldIds = parseKeyFieldsForCores(config);
 
         BATCH_SIZE =  config.getInt(SOLR_COMMIT_BATCH_SIZE, DEFAULT_BATCH_SIZE);
     }
@@ -150,7 +143,7 @@ public class SolrIndex implements IndexProvider {
         }
     }
 
-    private Map<String, String> parseKeyFieldsForCores(Configuration config) throws Exception {
+    private Map<String, String> parseKeyFieldsForCores(Configuration config) throws StorageException {
         Map<String, String> keyFieldNames = new HashMap<String, String>();
         List<String> coreFieldStatements = config.getList(SOLR_KEY_FIELD_NAMES);
         if (null == coreFieldStatements || coreFieldStatements.size() == 0) {
@@ -161,8 +154,8 @@ public class SolrIndex implements IndexProvider {
         } else {
             for (String coreFieldStatement : coreFieldStatements) {
                 String[] parts = coreFieldStatement.trim().split("=");
-                if (parts == null || parts.length == 0) {
-                    throw new Exception("Unable to parse the core name/ key field name pair. It should be of the format core=field");
+                if (parts.length != 2) {
+                    throw new PermanentStorageException("Unable to parse the core name/ key field name pair. It should be of the format core=field");
                 }
                 String coreName = parts[0];
                 String keyFieldName = parts[1];
@@ -252,8 +245,8 @@ public class SolrIndex implements IndexProvider {
                             newDoc.addField(keyIdField, docId);
                             for (IndexEntry ie : additions) {
                                 Object fieldValue = ie.value;
-                                if (GeoToWktConverter.isGeoshape(ie.value))  {
-                                    fieldValue = GeoToWktConverter.convertToWktString(ie.value);
+                                if (fieldValue instanceof Geoshape) {
+                                    fieldValue = GeoToWktConverter.convertToWktString((Geoshape) fieldValue);
                                 }
                                 newDoc.addField(ie.key, fieldValue);
                             }
@@ -266,8 +259,8 @@ public class SolrIndex implements IndexProvider {
                             for (IndexEntry ie : additions) {
                                 Map<String, String> updateFields = new HashMap<String, String>();
                                 Object fieldValue = ie.value;
-                                if (GeoToWktConverter.isGeoshape(ie.value))  {
-                                    fieldValue = GeoToWktConverter.convertToWktString(ie.value);
+                                if (fieldValue instanceof Geoshape) {
+                                    fieldValue = GeoToWktConverter.convertToWktString((Geoshape) fieldValue);
                                 }
                                 updateFields.put("set", fieldValue.toString());
                                 updateDoc.addField(ie.key, updateFields);
@@ -318,18 +311,19 @@ public class SolrIndex implements IndexProvider {
 
         try {
             if (numUpdates >= BATCH_SIZE || isLastBatch) {
+                /*
                 if (isEmbeddedMode) {
                     int commitWithinMs = 10000;
                     for(SolrInputDocument doc : documents) {
                         server.add(doc, commitWithinMs);
-                        server.commit();
                     }
                 } else {
-
+                */
                     server.add(documents);
-                    server.commit();
                     documents.clear();
-                }
+                //}
+                server.commit();
+                log.error("numUpdates: " + numUpdates);
             }
         } catch (HttpSolrServer.RemoteSolrException rse) {
             log.error("Unable to save documents to Solr as one of the shape objects stored were not compatible with Solr.", rse);
@@ -340,6 +334,8 @@ public class SolrIndex implements IndexProvider {
                     log.error(name + ":" + d.getFieldValue(name).toString());
                 }
             }
+
+            throw rse;
         }
     }
 
@@ -358,7 +354,7 @@ public class SolrIndex implements IndexProvider {
 
 
     @Override
-    public List<String> query(IndexQuery query, KeyInformation.IndexRetriever informaations, TransactionHandle tx) throws StorageException {
+    public List<String> query(IndexQuery query, KeyInformation.IndexRetriever informations, TransactionHandle tx) throws StorageException {
         List<String> result = new ArrayList<String>();
         String core = query.getStore();
         String keyIdField = keyFieldIds.get(core);
@@ -389,7 +385,7 @@ public class SolrIndex implements IndexProvider {
             response = solr.query(solrQuery);
             log.debug("Executed query [{}] in {} ms", query.getCondition(), response.getElapsedTime());
             int totalHits = response.getResults().size();
-            if (false == query.hasLimit() && totalHits >= MAX_RESULT_SET_SIZE) {
+            if (!query.hasLimit() && totalHits >= MAX_RESULT_SET_SIZE) {
                 log.warn("Query result set truncated to first [{}] elements for query: {}", MAX_RESULT_SET_SIZE, query);
             }
             result = new ArrayList<String>(totalHits);
@@ -399,8 +395,10 @@ public class SolrIndex implements IndexProvider {
 
         } catch (HttpSolrServer.RemoteSolrException e) {
             log.error("Query did not complete because parameters were not recognized : ", e);
+            throw new PermanentStorageException(e);
         } catch (SolrServerException e) {
             log.error("Unable to query Solr index.", e);
+            throw new PermanentStorageException(e);
         }
         return result;
     }
@@ -429,7 +427,7 @@ public class SolrIndex implements IndexProvider {
             response = solr.query(solrQuery);
             log.debug("Executed query [{}] in {} ms", query.getQuery(), response.getElapsedTime());
             int totalHits = response.getResults().size();
-            if (false == query.hasLimit() && totalHits >= MAX_RESULT_SET_SIZE) {
+            if (!query.hasLimit() && totalHits >= MAX_RESULT_SET_SIZE) {
                 log.warn("Query result set truncated to first [{}] elements for query: {}", MAX_RESULT_SET_SIZE, query);
             }
             result = new ArrayList<RawQuery.Result<String>>(totalHits);
@@ -441,8 +439,10 @@ public class SolrIndex implements IndexProvider {
             }
         } catch (HttpSolrServer.RemoteSolrException e) {
             log.error("Query did not complete because parameters were not recognized : ", e);
+            throw new PermanentStorageException(e);
         } catch (SolrServerException e) {
             log.error("Unable to query Solr index.", e);
+            throw new PermanentStorageException(e);
         }
         return result;
     }
@@ -450,7 +450,7 @@ public class SolrIndex implements IndexProvider {
 
     public SolrQuery buildQuery(SolrQuery q, Condition<?> condition) {
         if (condition instanceof PredicateCondition) {
-            PredicateCondition<String, ?> atom= (PredicateCondition<String, ?>) condition;
+            PredicateCondition<String, ?> atom = (PredicateCondition<String, ?>) condition;
             Object value = atom.getValue();
             String key = atom.getKey();
             TitanPredicate titanPredicate = atom.getPredicate();
@@ -638,10 +638,13 @@ public class SolrIndex implements IndexProvider {
             }
         } catch (SolrServerException e) {
             log.error("Unable to clear storage from index due to server error on Solr.", e);
+            throw new PermanentStorageException(e);
         } catch (IOException e) {
             log.error("Unable to clear storage from index due to low-level I/O error.", e);
+            throw new PermanentStorageException(e);
         } catch (Exception e) {
             log.error("Unable to clear storage from index due to general error.", e);
+            throw new PermanentStorageException(e);
         }
     }
 

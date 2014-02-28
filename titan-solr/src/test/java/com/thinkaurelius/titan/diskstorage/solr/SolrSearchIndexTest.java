@@ -1,5 +1,6 @@
 package com.thinkaurelius.titan.diskstorage.solr;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.thinkaurelius.titan.StorageSetup;
 import com.thinkaurelius.titan.core.attribute.Geo;
@@ -15,6 +16,7 @@ import com.thinkaurelius.titan.graphdb.query.condition.PredicateCondition;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 
@@ -47,9 +49,15 @@ public class SolrSearchIndexTest extends IndexProviderTest {
         //config.setProperty(SOLR_HTTP_CONNECTION_TIMEOUT, 10000); //in milliseconds
 
         //SOLR_MODE_EMBEDDED
+        config.setProperty(SOLR_MODE, SOLR_MODE_EMBEDDED);
         config.setProperty(GraphDatabaseConfiguration.STORAGE_DIRECTORY_KEY, StorageSetup.getHomeDir("solr"));
-        String home = "titan-solr/target/test-classes/solr/";
-        config.setProperty(SOLR_HOME, home);
+        config.setProperty(SOLR_HOME, Joiner.on(File.separator).join(System.getProperty("user.dir"), "titan-solr", "target", "test-classes", "solr"));
+
+
+        /*
+                , "StorageSetup.getHomeDir("solr")
+                "titan-solr/target/test-classes/solr/");
+                */
 
         //SOLR CLOUD
 //        config.setProperty(SOLR_MODE, SOLR_MODE_CLOUD);
@@ -66,8 +74,6 @@ public class SolrSearchIndexTest extends IndexProviderTest {
     @Test
     public void storeWithBoundingBoxGeospatialSearch() throws StorageException
     {
-        this.openIndex().clearStorage();
-
         String[] stores = new String[] { "vertex" };
 
         Map<String,Object> doc1 = getDocument("Hello world",1001,5.2, Geoshape.point(48.0, 0.0));
