@@ -110,8 +110,7 @@ public class IndexSerializer {
                 @Override
                 public KeyInformation get(String store, String key) {
                     Preconditions.checkState(transaction!=null,"Retriever has not been initialized");
-                    long keyid = string2KeyId(key);
-                    TitanKey titanKey = (TitanKey)transaction.getExistingType(keyid);
+                    TitanKey titanKey = (TitanKey)transaction.getType(key);
                     ElementType elementType = getElementType(store);
                     return getKeyInformation(titanKey,elementType.getElementType(),index);
                 }
@@ -416,20 +415,24 @@ public class IndexSerializer {
     }
 
     private static final String element2String(TitanElement element) {
-        if (element instanceof TitanVertex) return longID2Name(element.getID());
-        else {
+        if (element instanceof TitanVertex) {
+            return element.getId().toString();
+        } else {
             RelationIdentifier rid = (RelationIdentifier) element.getId();
             return rid.toString();
         }
     }
 
     private static final Object string2ElementId(String str) {
-        if (str.contains(RelationIdentifier.TOSTRING_DELIMITER)) return RelationIdentifier.parse(str);
-        else return name2LongID(str);
+        if (str.contains(RelationIdentifier.TOSTRING_DELIMITER)) {
+            return RelationIdentifier.parse(str);
+        } else {
+            return Long.valueOf(str);
+        }
     }
 
     private static final String key2String(TitanKey key) {
-        return longID2Name(key.getID());
+        return key.getName();
     }
 
     private static final long string2KeyId(String key) {
